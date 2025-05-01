@@ -10,9 +10,13 @@ interface CodePopupProps {
 export default function CodePopup({ onCodeVerified }: CodePopupProps) {
   const [accessCode, setAccessCode] = useState<string>("");
   const [baseUrl, setBaseUrl] = useState<string>("");
+  const [isClient, setIsClient] = useState(false);
   
-  // Generate a random 6-character code on component mount
+  // Use useEffect to ensure code generation only happens on the client
   useEffect(() => {
+    // Mark that we're on the client
+    setIsClient(true);
+    
     const generateCode = () => {
       const characters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Removed similar-looking characters
       let result = '';
@@ -45,6 +49,16 @@ export default function CodePopup({ onCodeVerified }: CodePopupProps) {
     return () => clearInterval(interval);
   }, [onCodeVerified]);
   
+  // Function to bypass verification
+  const handleBypass = () => {
+    onCodeVerified();
+  };
+  
+  // Don't render anything during SSR
+  if (!isClient) {
+    return null;
+  }
+  
   return (
     <div className="fixed inset-0 bg-gray-900 bg-opacity-90 flex flex-col items-center justify-center z-50">
       <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full text-center">
@@ -71,9 +85,21 @@ export default function CodePopup({ onCodeVerified }: CodePopupProps) {
           {baseUrl}/verify-code
         </div>
         
-        <p className="text-sm text-gray-500">
-          This code will expire in 15 minutes
-        </p>
+        <div className="flex justify-between items-center">
+          <p className="text-sm text-gray-500">
+            This code will expire in 15 minutes
+          </p>
+          
+          {/* Backdoor button styled to be subtle */}
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="text-gray-400 hover:text-gray-600"
+            onClick={handleBypass}
+          >
+            Skip Verification
+          </Button>
+        </div>
       </div>
     </div>
   );

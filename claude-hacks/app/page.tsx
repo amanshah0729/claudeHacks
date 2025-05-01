@@ -154,6 +154,8 @@ export default function Home() {
     setIsLoading(true);
     
     try {
+      console.log("Sending message to API:", userMessage.content);
+      
       // Call Claude API
       const response = await fetch("/api/chat", {
         method: "POST",
@@ -165,12 +167,12 @@ export default function Home() {
         }),
       });
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to get response from Claude");
-      }
-      
       const data = await response.json();
+      console.log("API response:", data);
+      
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to get response from Claude");
+      }
       
       // Add Claude's response to chat
       setChatMessages(prev => [
@@ -182,11 +184,38 @@ export default function Home() {
       // Add error message to chat
       setChatMessages(prev => [
         ...prev, 
-        { role: "assistant", content: "Sorry, I encountered an error. Please try again." }
+        { 
+          role: "assistant", 
+          content: "I'm having trouble connecting to my backend. Let me try to help anyway: " + 
+                   generateSimpleResponse(currentMessage)
+        }
       ]);
     } finally {
       setIsLoading(false);
     }
+  };
+  
+  // Simple fallback response generator for client-side
+  const generateSimpleResponse = (message: string) => {
+    const query = message.toLowerCase();
+    
+    if (query.includes('hello') || query.includes('hi')) {
+      return "Hello! I'm here to help with your coding challenge.";
+    }
+    
+    if (query.includes('fibonacci')) {
+      return "For the Fibonacci sequence, you need to add the two previous numbers to get the next one.";
+    }
+    
+    if (query.includes('palindrome')) {
+      return "A palindrome reads the same forward and backward. Try comparing characters from both ends.";
+    }
+    
+    if (query.includes('max')) {
+      return "To find the maximum value, compare each element with your current max and update when needed.";
+    }
+    
+    return "I'll do my best to help with your coding challenge. What specific part are you stuck on?";
   };
   
   // Handle Enter key press in chat input

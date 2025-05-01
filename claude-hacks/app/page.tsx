@@ -47,12 +47,21 @@ interface ChatMessage {
   content: string;
 }
 
-export default function Home() {
-  // Select a random challenge
-  const randomChallenge = CODING_CHALLENGES[Math.floor(Math.random() * CODING_CHALLENGES.length)];
+// Add a new component to handle client-side only rendering
+function ClientOnly({ children }: { children: React.ReactNode }) {
+  const [isClient, setIsClient] = useState(false);
   
-  // State for code and execution
-  const [userCode, setUserCode] = useState(randomChallenge.starterCode);
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+  
+  return isClient ? <>{children}</> : null;
+}
+
+export default function Home() {
+  // Use state for the selected challenge with initial random selection
+  const [currentChallenge, setCurrentChallenge] = useState(CODING_CHALLENGES[0]); // Default to first challenge
+  const [userCode, setUserCode] = useState(""); // Start with empty code
   const [output, setOutput] = useState("");
   const [isExecuting, setIsExecuting] = useState(false);
   
@@ -64,6 +73,14 @@ export default function Home() {
   const [currentMessage, setCurrentMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Initialize challenge and code on client-side only
+  useEffect(() => {
+    const randomIndex = Math.floor(Math.random() * CODING_CHALLENGES.length);
+    const selectedChallenge = CODING_CHALLENGES[randomIndex];
+    setCurrentChallenge(selectedChallenge);
+    setUserCode(selectedChallenge.starterCode);
+  }, []);
   
   // Function to simulate code execution
   const runCode = async () => {
@@ -91,7 +108,7 @@ export default function Home() {
       }
       
       // Check if the user has modified the code
-      if (userCode !== randomChallenge.starterCode) {
+      if (userCode !== currentChallenge.starterCode) {
         // If they've written some actual code, show the expected output
         if (userCode.includes("return") || userCode.includes("print(") || !userCode.includes("pass")) {
           setOutput(result);
@@ -149,7 +166,8 @@ export default function Home() {
       });
       
       if (!response.ok) {
-        throw new Error("Failed to get response from Claude");
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to get response from Claude");
       }
       
       const data = await response.json();
@@ -181,14 +199,16 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Code verification popup */}
-      {showCodePopup && <CodePopup onCodeVerified={handleCodeVerified} />}
+      {/* Code verification popup - only render on client */}
+      <ClientOnly>
+        {showCodePopup && <CodePopup onCodeVerified={handleCodeVerified} />}
+      </ClientOnly>
       
       {/* Header */}
       <header className="bg-white shadow-sm p-4 flex justify-between items-center">
         <div>
           <h1 className="text-xl font-semibold">Coding Challenge</h1>
-          <p className="text-sm text-gray-500">{randomChallenge.language}</p>
+          <p className="text-sm text-gray-500">{currentChallenge.language}</p>
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-100 text-blue-700">
@@ -209,7 +229,7 @@ export default function Home() {
           <div className="mb-4">
             <h2 className="text-lg font-semibold mb-2">Instructions</h2>
             <div className="prose prose-sm max-w-none">
-              <p>{randomChallenge.prompt}</p>
+              <p>{currentChallenge.prompt}</p>
             </div>
           </div>
           
@@ -226,77 +246,79 @@ export default function Home() {
             </p>
           </div>
           
-          {/* Chat Interface */}
-          <div className="flex-1 flex flex-col mt-4">
-            <h3 className="text-md font-medium mb-2">Chat with Claude</h3>
-            
-            {/* Chat messages container */}
-            <div 
-              ref={chatContainerRef}
-              className="flex-1 bg-gray-50 rounded-lg border border-gray-200 mb-3 overflow-y-auto max-h-[300px] p-3"
-            >
-              {chatMessages.length === 0 ? (
-                <div className="text-gray-400 text-center py-8">
-                  Ask Claude for help with your coding challenge
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {chatMessages.map((msg, index) => (
-                    <div 
-                      key={index} 
-                      className={`p-3 rounded-lg ${
-                        msg.role === "user" 
-                          ? "bg-blue-100 ml-6" 
-                          : "bg-white border border-gray-200 mr-6"
-                      }`}
-                    >
-                      <div className="text-xs font-semibold mb-1">
-                        {msg.role === "user" ? "You" : "Claude"}
-                      </div>
-                      <div className="text-sm whitespace-pre-wrap">
-                        {msg.content}
-                      </div>
-                    </div>
-                  ))}
-                  
-                  {isLoading && (
-                    <div className="bg-white border border-gray-200 p-3 rounded-lg mr-6">
-                      <div className="text-xs font-semibold mb-1">Claude</div>
-                      <div className="text-sm">Thinking...</div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-            
-            {/* Chat input */}
-            <div className="relative">
-              <textarea
-                className="w-full border border-gray-300 rounded-lg py-2 px-3 pr-10 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Ask Claude for help..."
-                rows={2}
-                value={currentMessage}
-                onChange={(e) => setCurrentMessage(e.target.value)}
-                onKeyDown={handleKeyDown}
-                disabled={isLoading}
-              />
-              <Button
-                size="icon"
-                className="absolute right-2 bottom-2 h-8 w-8"
-                onClick={sendMessage}
-                disabled={isLoading || !currentMessage.trim()}
+          {/* Chat Interface - only render on client */}
+          <ClientOnly>
+            <div className="flex-1 flex flex-col mt-4">
+              <h3 className="text-md font-medium mb-2">Chat with Claude</h3>
+              
+              {/* Chat messages container */}
+              <div 
+                ref={chatContainerRef}
+                className="flex-1 bg-gray-50 rounded-lg border border-gray-200 mb-3 overflow-y-auto max-h-[300px] p-3"
               >
-                <Send className="h-4 w-4" />
-              </Button>
+                {chatMessages.length === 0 ? (
+                  <div className="text-gray-400 text-center py-8">
+                    Ask Claude for help with your coding challenge
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {chatMessages.map((msg, index) => (
+                      <div 
+                        key={index} 
+                        className={`p-3 rounded-lg ${
+                          msg.role === "user" 
+                            ? "bg-blue-100 ml-6" 
+                            : "bg-white border border-gray-200 mr-6"
+                        }`}
+                      >
+                        <div className="text-xs font-semibold mb-1">
+                          {msg.role === "user" ? "You" : "Claude"}
+                        </div>
+                        <div className="text-sm whitespace-pre-wrap">
+                          {msg.content}
+                        </div>
+                      </div>
+                    ))}
+                    
+                    {isLoading && (
+                      <div className="bg-white border border-gray-200 p-3 rounded-lg mr-6">
+                        <div className="text-xs font-semibold mb-1">Claude</div>
+                        <div className="text-sm">Thinking...</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              
+              {/* Chat input */}
+              <div className="relative">
+                <textarea
+                  className="w-full border border-gray-300 rounded-lg py-2 px-3 pr-10 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Ask Claude for help..."
+                  rows={2}
+                  value={currentMessage}
+                  onChange={(e) => setCurrentMessage(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  disabled={isLoading}
+                />
+                <Button
+                  size="icon"
+                  className="absolute right-2 bottom-2 h-8 w-8"
+                  onClick={sendMessage}
+                  disabled={isLoading || !currentMessage.trim()}
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
-          </div>
+          </ClientOnly>
         </div>
         
-        {/* Right panel - Code editor */}
+        {/* Right panel - Code editor - only render on client */}
         <div className="flex-1 flex flex-col">
           <div className="p-3 bg-gray-800 text-white flex items-center justify-between">
             <Badge variant="outline" className="text-gray-300 border-gray-600">
-              {randomChallenge.language}
+              {currentChallenge.language}
             </Badge>
             <div className="flex gap-2">
               <Button 
@@ -312,31 +334,32 @@ export default function Home() {
             </div>
           </div>
           <div className="flex-1 flex flex-col">
-            <div className={`${output ? 'h-2/3' : 'h-full'} overflow-hidden`}>
-              <Editor
-                height="100%"
-                defaultValue={userCode}
-                value={userCode}
-                onChange={(value) => setUserCode(value || "")}
-                language="python"
-                theme="vs-dark"
-                options={{
-                  minimap: { enabled: false },
-                  scrollBeyondLastLine: false,
-                  fontSize: 14,
-                  wordWrap: "on",
-                  automaticLayout: true,
-                  readOnly: false,
-                  tabSize: 4,
-                }}
-                className="flex-1 rounded-none border-0 font-mono text-sm"
-                loading={
-                  <div className="flex items-center justify-center h-full bg-gray-800">
-                    <div className="text-white">Loading editor...</div>
-                  </div>
-                }
-              />
-            </div>
+            <ClientOnly>
+              <div className={`${output ? 'h-2/3' : 'h-full'} overflow-hidden`}>
+                <Editor
+                  height="100%"
+                  value={userCode}
+                  onChange={(value) => setUserCode(value || "")}
+                  language="python"
+                  theme="vs-dark"
+                  options={{
+                    minimap: { enabled: false },
+                    scrollBeyondLastLine: false,
+                    fontSize: 14,
+                    wordWrap: "on",
+                    automaticLayout: true,
+                    readOnly: false,
+                    tabSize: 4,
+                  }}
+                  className="flex-1 rounded-none border-0 font-mono text-sm"
+                  loading={
+                    <div className="flex items-center justify-center h-full bg-gray-800">
+                      <div className="text-white">Loading editor...</div>
+                    </div>
+                  }
+                />
+              </div>
+            </ClientOnly>
             
             {/* Output panel */}
             {output && (

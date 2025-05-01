@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Clock, Play, ArrowRight } from "lucide-react";
+import { Clock, Play, ArrowRight, Send } from "lucide-react";
 import dynamic from "next/dynamic";
 import CodePopup from "@/components/CodePopup";
 
@@ -41,6 +41,12 @@ const MOCK_EXECUTION_RESULTS = {
   "fibonacci": "8"
 };
 
+// Chat message type
+interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
 export default function Home() {
   // Select a random challenge
   const randomChallenge = CODING_CHALLENGES[Math.floor(Math.random() * CODING_CHALLENGES.length)];
@@ -52,6 +58,12 @@ export default function Home() {
   
   // State for code verification popup
   const [showCodePopup, setShowCodePopup] = useState(true);
+  
+  // State for chat
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [currentMessage, setCurrentMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   
   // Function to simulate code execution
   const runCode = async () => {
@@ -102,6 +114,70 @@ export default function Home() {
   const handleCodeVerified = () => {
     setShowCodePopup(false);
   };
+  
+  // Scroll to bottom of chat when messages change
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [chatMessages]);
+  
+  // Function to send message to Claude API
+  const sendMessage = async () => {
+    if (!currentMessage.trim() || isLoading) return;
+    
+    // Add user message to chat
+    const userMessage: ChatMessage = {
+      role: "user",
+      content: currentMessage
+    };
+    
+    setChatMessages(prev => [...prev, userMessage]);
+    setCurrentMessage("");
+    setIsLoading(true);
+    
+    try {
+      // Call Claude API
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: [...chatMessages, userMessage],
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error("Failed to get response from Claude");
+      }
+      
+      const data = await response.json();
+      
+      // Add Claude's response to chat
+      setChatMessages(prev => [
+        ...prev, 
+        { role: "assistant", content: data.response }
+      ]);
+    } catch (error) {
+      console.error("Error calling Claude API:", error);
+      // Add error message to chat
+      setChatMessages(prev => [
+        ...prev, 
+        { role: "assistant", content: "Sorry, I encountered an error. Please try again." }
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  // Handle Enter key press in chat input
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -129,7 +205,7 @@ export default function Home() {
       
       <div className="flex flex-1 overflow-hidden">
         {/* Left panel - Instructions */}
-        <div className="w-1/3 p-4 bg-white border-r overflow-y-auto">
+        <div className="w-1/3 p-4 bg-white border-r overflow-y-auto flex flex-col">
           <div className="mb-4">
             <h2 className="text-lg font-semibold mb-2">Instructions</h2>
             <div className="prose prose-sm max-w-none">
@@ -137,7 +213,7 @@ export default function Home() {
             </div>
           </div>
           
-          <div className="mt-8">
+          <div className="mt-4 mb-4">
             <h3 className="text-md font-medium mb-2">Video Feed</h3>
             <div className="relative rounded-lg overflow-hidden bg-gray-900 aspect-video">
               {/* Placeholder for video */}
@@ -148,6 +224,71 @@ export default function Home() {
             <p className="text-xs text-gray-500 mt-1">
               Video recording is disabled for this demo
             </p>
+          </div>
+          
+          {/* Chat Interface */}
+          <div className="flex-1 flex flex-col mt-4">
+            <h3 className="text-md font-medium mb-2">Chat with Claude</h3>
+            
+            {/* Chat messages container */}
+            <div 
+              ref={chatContainerRef}
+              className="flex-1 bg-gray-50 rounded-lg border border-gray-200 mb-3 overflow-y-auto max-h-[300px] p-3"
+            >
+              {chatMessages.length === 0 ? (
+                <div className="text-gray-400 text-center py-8">
+                  Ask Claude for help with your coding challenge
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {chatMessages.map((msg, index) => (
+                    <div 
+                      key={index} 
+                      className={`p-3 rounded-lg ${
+                        msg.role === "user" 
+                          ? "bg-blue-100 ml-6" 
+                          : "bg-white border border-gray-200 mr-6"
+                      }`}
+                    >
+                      <div className="text-xs font-semibold mb-1">
+                        {msg.role === "user" ? "You" : "Claude"}
+                      </div>
+                      <div className="text-sm whitespace-pre-wrap">
+                        {msg.content}
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {isLoading && (
+                    <div className="bg-white border border-gray-200 p-3 rounded-lg mr-6">
+                      <div className="text-xs font-semibold mb-1">Claude</div>
+                      <div className="text-sm">Thinking...</div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            
+            {/* Chat input */}
+            <div className="relative">
+              <textarea
+                className="w-full border border-gray-300 rounded-lg py-2 px-3 pr-10 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Ask Claude for help..."
+                rows={2}
+                value={currentMessage}
+                onChange={(e) => setCurrentMessage(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={isLoading}
+              />
+              <Button
+                size="icon"
+                className="absolute right-2 bottom-2 h-8 w-8"
+                onClick={sendMessage}
+                disabled={isLoading || !currentMessage.trim()}
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
         
